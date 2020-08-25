@@ -1,40 +1,26 @@
 from flask import Flask, request, redirect, abort, Response
-import datetime, database
+import datetime as dt 
+import database, redis
 
 app = Flask(__name__)
-
-accesses = dict()
+redis_app = redis.Redis('localhost', 6379, db=0)
 
 @app.route('/<key>', methods=['GET'])
 def rate_limit_and_serve(key):
     
     headers = request.headers
     user = headers['user']
-    if headers['user'] in accesses:
-        difference = datetime.datetime.now() - accesses[user]
+    if redis_app.exists(user):
+        now_str = dt.datetime.strftime(dt.datetime.now(), '%H:%M:%S')
+        now = dt.datetime.strptime(now_str, '%H:%M:%S')
+        print(str(redis_app.get(user)))
+        cached_time = dt.datetime.strptime(redis_app.get(user).decode(), '%H:%M:%S')
+        difference = now - cached_time 
+        print(type(difference))
+        print(difference.total_seconds())
         if difference.total_seconds() < 5:
             abort(429, 'Too many requests')
         
-    accesses[user] = datetime.datetime.now()
+    now = dt.datetime.now().strftime('%H:%M:%S')
+    redis_app.set(user, now)
     return database.get(key) + '\n'
-
-# Redis implementation
-# from flask import Flask, request, redirect, abort, Response
-# import datetime, database, redis
-
-# app = Flask(__name__)
-# redis_app = redis.Redis('localhost', 6379, db=0)
-# # accesses = dict()
-
-# @app.route('/<key>', methods=['GET'])
-# def rate_limit_and_serve(key):
-    
-#     headers = request.headers
-#     user = headers['user']
-#     if redis_app.exists(user):
-#         difference = datetime.datetime.now() - redis_app.get(user)
-#         if difference.total_seconds() < 5:
-#             abort(429, 'Too many requests')
-        
-#     redis_app.set(user, datetime.datetime.now())
-#     return database.get(key) + '\n'
